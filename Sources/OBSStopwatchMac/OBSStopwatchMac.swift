@@ -11,6 +11,9 @@ final class StopwatchModel: ObservableObject {
     private let outputURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("obs-stopwatch.txt")
 
     init() {
+        let restored = loadCurrentValue()
+        elapsed = restored
+        currentElapsed = restored
         writeCurrentValue()
     }
 
@@ -25,6 +28,22 @@ final class StopwatchModel: ObservableObject {
         let minutes = (total % 3600) / 60
         let seconds = total % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    static func parse(_ timeString: String) -> TimeInterval? {
+        let trimmed = timeString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = trimmed.split(separator: ":")
+        guard parts.count == 3,
+              let hours = Int(parts[0]),
+              let minutes = Int(parts[1]),
+              let seconds = Int(parts[2]),
+              hours >= 0,
+              (0...59).contains(minutes),
+              (0...59).contains(seconds)
+        else {
+            return nil
+        }
+        return TimeInterval((hours * 3600) + (minutes * 60) + seconds)
     }
 
     func start() {
@@ -101,6 +120,15 @@ final class StopwatchModel: ObservableObject {
             print("Failed writing \(outputURL.path): \(error)")
         }
     }
+
+    private func loadCurrentValue() -> TimeInterval {
+        guard let data = try? String(contentsOf: outputURL, encoding: .utf8),
+              let parsed = Self.parse(data)
+        else {
+            return 0
+        }
+        return parsed
+    }
 }
 
 struct ContentView: View {
@@ -112,22 +140,6 @@ struct ContentView: View {
             Text(model.formatted)
                 .font(.system(size: 56, weight: .semibold, design: .monospaced))
                 .frame(maxWidth: .infinity, alignment: .center)
-
-            HStack(spacing: 10) {
-                Button(model.isRunning ? "Pause" : "Start") {
-                    model.togglePauseResume()
-                }
-                .keyboardShortcut(.space, modifiers: [])
-
-                Button("Stop") {
-                    model.stop()
-                }
-
-                Button("Reset…") {
-                    confirmReset = true
-                }
-                .foregroundStyle(.red)
-            }
 
             Text("Writes to ~/obs-stopwatch.txt for OBS Text source")
                 .foregroundStyle(.secondary)
